@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>College Map - Pro Navigation</title>
+
+    <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Roboto', sans-serif;
+            overflow: hidden;
+            background: #121212;
+            touch-action: none;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            z-index: 1;
+        }
+
+        #search-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 360px;
+            background: #202124;
+            border-radius: 12px;
+            border: 1px solid #3c4043;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            color: #e8eaed;
+            transition: all 0.3s ease;
+        }
+
+        .header {
+            background: #303134;
+            padding: 15px;
+            font-weight: 500;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 12px 12px 0 0;
+            border-bottom: 1px solid #3c4043;
+        }
+
+        .drag-handle {
+            display: none;
+            width: 40px;
+            height: 4px;
+            background: #5f6368;
+            border-radius: 4px;
+            margin: 0 auto 10px auto;
+        }
+
+        .input-group {
+            padding: 12px 15px;
+            border-bottom: 1px solid #3c4043;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group select {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #5f6368;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #303134;
+            color: #e8eaed;
+            appearance: none;
+        }
+
+        .input-group select:focus {
+            border-color: #8ab4f8;
+            outline: none;
+        }
+
+        .btn-directions {
+            margin: 12px 15px;
+            padding: 12px;
+            background: #8ab4f8;
+            color: #202124;
+            border: none;
+            border-radius: 24px;
+            font-weight: 700;
+            font-size: 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            transition: 0.2s;
+        }
+
+        .btn-directions:hover {
+            background: #aecbfa;
+        }
+
+        #route-summary {
+            display: none;
+            padding: 10px 15px;
+            background: #1e3a5f;
+            color: #aecbfa;
+            font-size: 14px;
+            font-weight: bold;
+            border-bottom: 1px solid #3c4043;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #steps-container {
+            max-height: 250px;
+            overflow-y: auto;
+            padding: 0 15px 15px 15px;
+            font-size: 14px;
+            color: #bdc1c6;
+        }
+
+        .step {
+            padding: 12px 0;
+            border-bottom: 1px solid #3c4043;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .step:last-child {
+            border-bottom: none;
+            font-weight: 500;
+            color: #81c995;
+        }
+
+        .step .icon {
+            font-size: 20px;
+            color: #8ab4f8;
+        }
+
+        #hover-tooltip {
+            position: absolute;
+            background: #202124;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #3c4043;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 20;
+            transform: translate(-50%, -120%);
+            min-width: 160px;
+            color: #e8eaed;
+        }
+
+        #hover-tooltip h4 {
+            margin: 0 0 4px 0;
+            font-size: 15px;
+            color: #e8eaed;
+        }
+
+        #hover-tooltip p {
+            margin: 0;
+            font-size: 13px;
+            color: #9aa0a6;
+            line-height: 1.4;
+        }
+
+        #hover-tooltip .type {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #202124;
+            margin-bottom: 6px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #5f6368;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            #search-panel {
+                top: auto;
+                bottom: 0;
+                left: 0;
+                width: 100vw;
+                border-radius: 20px 20px 0 0;
+                border: none;
+                max-height: 55vh;
+            }
+
+            .header {
+                border-radius: 20px 20px 0 0;
+                flex-direction: column;
+                align-items: center;
+                padding-top: 10px;
+            }
+
+            .drag-handle {
+                display: block;
+            }
+
+            #steps-container {
+                max-height: 25vh;
+            }
+
+            #hover-tooltip {
+                transform: translate(-50%, -140%);
+            }
+        }
+        #search-panel { animation: user-panel-enter 600ms cubic-bezier(0.2, 0.75, 0.25, 1) both; }
+        .input-group { transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease; }
+        .input-group:focus-within { transform: translateY(-1px); }
+        .input-group select { transition: border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease; }
+        .btn-directions:active { transform: translateY(0) scale(0.985); }
+        .step { animation: user-step-enter 300ms ease-out both; }
+        .maplibregl-ctrl-group { animation: user-control-enter 450ms 350ms ease-out both; }
+        @keyframes user-panel-enter { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes user-step-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes user-control-enter { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="search-panel">
+        <div class="header">
+            <div class="drag-handle"></div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-icons">school</span> Campus Pro Nav
+            </div>
+        </div>
+        <div class="input-group">
+            <span class="material-icons" style="color: #f28b82;">my_location</span>
+            <select id="start-node">
+                <option value="">Choose starting point...</option>
+            </select>
+        </div>
+        <div class="input-group" style="border-bottom: none;">
+            <span class="material-icons" style="color: #81c995;">location_on</span>
+            <select id="end-node">
+                <option value="">Choose destination...</option>
+            </select>
+        </div>
+        <button class="btn-directions" onclick="calculateRoute()">
+            <span class="material-icons">directions</span> Show Route
+        </button>
+        <button id="tts-toggle-btn" class="btn-directions" onclick="toggleTTS()" style="background: #ff9800; margin-top: 8px;">
+            <span class="material-icons">volume_up</span> TTS On
+        </button>
+        <button id="tts-test-btn" class="btn-directions" onclick="testTTS()" style="background: #9c27b0; margin-top: 8px;">
+            <span class="material-icons">play_arrow</span> Test TTS
+        </button>
+        <div id="route-summary">
+            <span id="eta-text"><span class="material-icons"
+                    style="font-size:16px; vertical-align:middle;">schedule</span> -- min</span>
+            <span id="dist-text">-- m</span>
+        </div>
+        <button id="view-activities-btn" class="btn-directions" style="display: none;" onclick="viewActivities()">
+            <span class="material-icons">visibility</span> View Activities
+        </button>
+        <div id="steps-container"></div>
+    </div>
+
+    <div id="hover-tooltip">
+        <span class="type" id="tt-type">Classroom</span>
+        <h4 id="tt-name">Room Name</h4>
+        <p id="tt-desc">Description goes here...</p>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <script>
+        const role = localStorage.getItem("role");
+
+        if(role === "visitor"){
+        console.log("Visitor Mode: Limited Access");
+        }
+
+        if(role === "exam"){
+        console.log("Exam Candidate Mode: Exam halls only");
+        }
+
+        if(role === "admin"){
+        console.log("Admin Mode: Full Access");
+        document.getElementById('view-activities-btn').style.display = 'block';
+        }
+
+        // Text-to-Speech functionality
+        let speechSynthesis = window.speechSynthesis;
+        let isTTSEnabled = localStorage.getItem("ttsEnabled") !== "false"; // Default to true
+        let voices = [];
+
+        // Load voices when available
+        function loadVoices() {
+            voices = speechSynthesis.getVoices();
+        }
+
+        // Some browsers load voices asynchronously
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        loadVoices(); // Initial load
+
+        function speak(text) {
+            // Check if TTS is enabled and speech synthesis is supported
+            if (!isTTSEnabled) {
+                console.log("TTS is disabled");
+                return;
+            }
+            
+            if (!speechSynthesis) {
+                console.error("Speech synthesis not supported in this browser");
+                alert("Text-to-speech is not supported in your browser");
+                return;
+            }
+
+            try {
+                // Cancel any ongoing speech
+                speechSynthesis.cancel();
+                // ensure voices loaded
+                if (voices.length === 0) loadVoices();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                
+                // Set language and voice (prefer en-US)
+                utterance.lang = 'en-US';
+                if (voices.length > 0) {
+                    const preferred = voices.find(voice => voice.lang === 'en-US') || voices.find(voice => voice.lang.startsWith('en'));
+                    if (preferred) {
+                        utterance.voice = preferred;
+                    }
+                }
+                
+                // Audio settings standard for clarity
+                utterance.rate = 1;
+                utterance.pitch = 1;
+                utterance.volume = 1;
+                
+                // Add event listeners for debugging
+                utterance.onstart = () => console.log("Speech started:", text);
+                utterance.onend = () => console.log("Speech ended:", text);
+                utterance.onerror = (e) => console.error("Speech error:", e);
+                
+                // Speak the text
+                speechSynthesis.speak(utterance);
+                
+            } catch (error) {
+                console.error("Error in speech synthesis:", error);
+                alert("Error with text-to-speech: " + error.message);
+            }
+        }
+
+        function toggleTTS() {
+            isTTSEnabled = !isTTSEnabled;
+            localStorage.setItem("ttsEnabled", isTTSEnabled);
+            const btn = document.getElementById('tts-toggle-btn');
+            btn.innerHTML = isTTSEnabled ? '<span class="material-icons">volume_up</span> TTS On' : '<span class="material-icons">volume_off</span> TTS Off';
+            
+            // Test TTS when enabling
+            if (isTTSEnabled) {
+                speak("Text to speech enabled");
+            }
+        }
+
+        // Test TTS function for debugging
+        function testTTS() {
+            speak("Testing text to speech. This is a test message.");
+        }
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#11141a' } }] },
+            center: [76.10800, 10.70200], zoom: 18.5, pitch: 60, bearing: -20
+        });
+
+        const features = [];
+        const nodes = {};
+        const edges = {};
+
+        function addPoly(id, name, desc, type, color, h, w, s, e, n) {
+            features.push({
+                type: "Feature", properties: { id, name, description: desc, height: h, color, type },
+                geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] }
+            });
+            nodes[id] = { name, coords: [(w + e) / 2, (s + n) / 2] };
+        }
+
+        const cLab = '#1967d2', cAdmin = '#c5221f', cStudy = '#f29900', cClass = '#4c4443', cSci = '#1e8e3e', cFacil = '#5f6348', cHall = '#8e24aa';
+
+        addPoly('yard', 'Open courtyard', 'Central open space', 'Outdoor', '#1e2b22', 0.1, 76.1078, 10.70175, 76.1093, 10.70225);
+
+        // --- NORTH WING ---
+        addPoly('n_chod', 'Civil HOD Room', 'Head of Civil Dept', 'Admin', cAdmin, 5, 76.10785, 10.70238, 76.10805, 10.7025);
+        addPoly('n_cfac', 'Civil Faculty Room', 'Civil Staff', 'Admin', cAdmin, 5, 76.10785, 10.70226, 76.10805, 10.70237);
+        addPoly('n_cad', 'CAD Lab', 'Computer Aided Design', 'Lab', cLab, 5, 76.1081, 10.70226, 76.1083, 10.7025);
+        addPoly('n_cc', 'CC Lab', 'Computing Center', 'Lab', cLab, 5, 76.10835, 10.70226, 76.10855, 10.7025);
+        addPoly('n_pg', 'PG Research Center', 'Postgrad Research', 'Study', cStudy, 5, 76.1086, 10.70226, 76.10885, 10.7025);
+        addPoly('n_lib', 'LIBRARY', 'Main Library', 'Study', cStudy, 6, 76.1089, 10.70226, 76.10915, 10.7025);
+        addPoly('n_ahod', 'ASH HOD Room', 'Applied Science HOD', 'Admin', cAdmin, 5, 76.1092, 10.70238, 76.10935, 10.7025);
+        addPoly('n_afac', 'ASH Faculty Room', 'Applied Science Staff', 'Admin', cAdmin, 5, 76.1092, 10.70226, 76.10935, 10.70237);
+
+        // --- WEST WING ---
+        addPoly('w_123', '123 CE S3 S4', 'Civil Class', 'Class', cClass, 5, 76.1074, 10.70235, 76.10765, 10.7025);
+        addPoly('w_122', '122 CE S5 S6', 'Civil Class', 'Class', cClass, 5, 76.1074, 10.70215, 76.10765, 10.7023);
+        addPoly('w_bt', 'Boys Toilet', 'Restroom', 'Facility', cFacil, 5, 76.1074, 10.7020, 76.10765, 10.7021);
+        addPoly('w_st', 'Store', 'Supplies', 'Facility', cFacil, 5, 76.1074, 10.70185, 76.10765, 10.70195);
+        addPoly('w_119', '119 CE S8 S7', 'Civil Class', 'Class', cClass, 5, 76.1074, 10.70165, 76.10765, 10.7018);
+        addPoly('w_gt', 'Girls Toilet', 'Restroom', 'Facility', cFacil, 5, 76.1074, 10.7015, 76.10765, 10.7016);
+
+        // --- EAST WING ---
+        addPoly('e_s1a', 'S1/S2 Class (N)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70235, 76.1097, 10.7025);
+        addPoly('e_s1b', 'S1/S2 Class (NM)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70215, 76.1097, 10.7023);
+        addPoly('e_gt', 'Girls Toilet', 'Restroom', 'Facility', cFacil, 5, 76.10945, 10.7020, 76.1097, 10.7021);
+        addPoly('e_sr', 'Sick Room', 'Medical Aid', 'Facility', cFacil, 5, 76.10945, 10.7018, 76.1097, 10.70195);
+        addPoly('e_s1c', 'S1/S2 Class (SM)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.7016, 76.1097, 10.70175);
+        addPoly('e_bt', 'Boys Toilet', 'Restroom', 'Facility', cFacil, 5, 76.10945, 10.70145, 76.1097, 10.70155);
+        addPoly('e_s1d', 'S1/S2 Class (SE Top)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70125, 76.1097, 10.7014);
+        addPoly('e_s1e', 'S1/S2 Class (SE Bot)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70105, 76.1097, 10.7012);
+
+        // --- SOUTH WING ---
+        addPoly('s_arts', 'ARTS', 'Arts Block', 'Class', cHall, 6, 76.1073, 10.7012, 76.1077, 10.70145);
+        addPoly('s_prin', 'PRINCIPAL ROOM', 'Principal Office', 'Admin', cAdmin, 5, 76.10775, 10.70155, 76.1081, 10.7017);
+        addPoly('s_off', 'OFFICE', 'Main Office', 'Admin', cAdmin, 5, 76.10775, 10.70135, 76.10795, 10.7015);
+        addPoly('s_adm', 'Admission', 'Admissions Office', 'Admin', cAdmin, 5, 76.1080, 10.70135, 76.10815, 10.7015);
+        addPoly('s_conf', 'Conference Hall', 'Meetings & Events', 'Hall', cHall, 5, 76.1082, 10.70155, 76.1086, 10.7017);
+        addPoly('s_meet', 'Meeting Room', 'Small Meetings', 'Hall', cHall, 5, 76.1082, 10.70135, 76.1086, 10.70145);
+        addPoly('s_rec', 'Reception', 'Front Desk', 'Admin', cAdmin, 5, 76.10865, 10.70155, 76.10885, 10.7017);
+        addPoly('s_ent', 'Entrance', 'Main Gate', 'Facility', cFacil, 3, 76.10865, 10.7013, 76.10885, 10.7014);
+        addPoly('s_r0', 'Room 0', 'Admin Room 0', 'Admin', cAdmin, 5, 76.1089, 10.70155, 76.1091, 10.7017);
+        addPoly('s_trans', 'Transportation', 'Transport Office', 'Admin', cAdmin, 5, 76.1089, 10.70135, 76.10905, 10.70145);
+        addPoly('s_ao', 'AO', 'Administrative Officer', 'Admin', cAdmin, 5, 76.1091, 10.70135, 76.1092, 10.70145);
+        addPoly('s_cash', 'Cash Counter', 'Payments', 'Admin', cAdmin, 5, 76.10915, 10.70155, 76.10935, 10.7017);
+        addPoly('s_acc', 'Account Office', 'Accounts Dept', 'Admin', cAdmin, 5, 76.1092, 10.70135, 76.1094, 10.7015);
+
+        // ================= MATHEMATICALLY SORTED ROUTING GRAPH =================
+        nodes['nw'] = { name: "NW Corner", coords: [76.10775, 10.7023] };
+        nodes['ne'] = { name: "NE Corner", coords: [76.1094, 10.7023] };
+        nodes['se'] = { name: "SE Corner", coords: [76.1094, 10.7016] };
+        nodes['sw'] = { name: "SW Corner", coords: [76.10775, 10.7016] };
+        nodes['j_nw_top'] = { name: "NW Top Junction", coords: [76.10775, 10.7024] };
+        nodes['j_tr_1'] = { name: "NE Top Junction", coords: [76.1094, 10.7024] };
+        nodes['j_s1'] = { name: "Path Junction", coords: [76.10815, 10.7016] };
+        nodes['j_s2'] = { name: "Path Junction", coords: [76.10875, 10.7016] };
+        nodes['j_s3'] = { name: "Path Junction", coords: [76.10912, 10.7016] };
+        nodes['j_sub1'] = { name: "Path Junction", coords: [76.10815, 10.70145] };
+        nodes['j_sub2'] = { name: "Path Junction", coords: [76.10875, 10.70145] };
+        nodes['j_sub3'] = { name: "Path Junction", coords: [76.10912, 10.70145] };
+
+        function linkPath(pathArray) {
+            for (let i = 0; i < pathArray.length - 1; i++) {
+                let a = pathArray[i]; let b = pathArray[i + 1];
+                if (!edges[a]) edges[a] = []; if (!edges[b]) edges[b] = [];
+                if (!edges[a].includes(b)) edges[a].push(b);
+                if (!edges[b].includes(a)) edges[b].push(a);
+            }
+        }
+
+        // Perfectly georeferenced arrays (prevents line zig-zagging backwards)
+        linkPath(['nw', 'n_cad', 'n_cc', 'n_pg', 'n_lib', 'ne']);
+        linkPath(['s_arts', 'sw', 's_prin', 'j_s1', 's_conf', 'j_s2', 's_rec', 's_r0', 'j_s3', 's_cash', 'se']);
+        linkPath(['s_off', 's_adm', 'j_sub1', 's_meet', 'j_sub2', 's_trans', 'j_sub3', 's_acc']);
+        linkPath(['n_chod', 'w_123', 'j_nw_top', 'n_cfac', 'nw', 'w_122', 'w_bt', 'w_st', 'w_119', 'sw', 'w_gt']);
+        linkPath(['n_ahod', 'e_s1a', 'j_tr_1', 'n_afac', 'ne', 'e_s1b', 'e_gt', 'e_sr', 'e_s1c', 'se', 'e_bt', 'e_s1d', 'e_s1e']);
+
+        // Connect the South sub-corridor branches
+        linkPath(['j_s1', 'j_sub1']);
+        linkPath(['j_s2', 'j_sub2', 's_ent']);
+        linkPath(['j_s3', 'j_sub3', 's_ao']);
+        // =================================================
+
+        const roomIds = [
+            'n_chod', 'n_cfac', 'n_cad', 'n_cc', 'n_pg', 'n_lib', 'n_ahod', 'n_afac',
+            'w_123', 'w_122', 'w_bt', 'w_st', 'w_119', 'w_gt',
+            'e_s1a', 'e_s1b', 'e_gt', 'e_sr', 'e_s1c', 'e_bt',
+            's_arts', 's_prin', 's_off', 's_adm', 's_conf', 's_meet', 's_rec', 's_ent',
+            's_r0', 's_trans', 's_ao', 's_cash', 's_acc', 'e_s1d', 'e_s1e'
+        ];
+
+        const startSelect = document.getElementById('start-node');
+        const endSelect = document.getElementById('end-node');
+        roomIds.forEach(id => {
+            startSelect.add(new Option(nodes[id].name, id));
+            endSelect.add(new Option(nodes[id].name, id));
+        });
+        endSelect.selectedIndex = 5;
+
+        let animationId = null;
+
+        map.on('load', () => {
+            map.addSource('campus', { type: 'geojson', data: { type: "FeatureCollection", features } });
+
+            map.addLayer({
+                id: 'rooms-3d', type: 'fill-extrusion', source: 'campus',
+                paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-opacity': 0.75 }
+            });
+
+            map.addLayer({
+                id: 'room-labels', type: 'symbol', source: 'campus', filter: ['>', ['get', 'height'], 1],
+                layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-anchor': 'center' },
+                paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 }
+            });
+
+            map.addSource('corridors', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: [
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10775, 10.7023], [76.1094, 10.7023], [76.1094, 10.7016], [76.10775, 10.7016], [76.10775, 10.7023]] } },
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10775, 10.7023], [76.10775, 10.7025]] } },
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.1094, 10.7023], [76.1094, 10.7025]] } },
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10815, 10.7016], [76.10815, 10.70135]] } },
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10815, 10.70145], [76.10912, 10.70145]] } },
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10875, 10.7016], [76.10875, 10.7013]] } },
+                        { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10912, 10.7016], [76.10912, 10.70135]] } }
+                    ]
+                }
+            });
+
+            map.addLayer({
+                id: 'corridor-lines-outline', type: 'line', source: 'corridors',
+                paint: { 'line-color': '#000000', 'line-width': 16, 'line-opacity': 0.8 },
+                layout: { 'line-join': 'round', 'line-cap': 'round' }
+            }, 'rooms-3d');
+
+            map.addLayer({
+                id: 'corridor-lines-fill', type: 'line', source: 'corridors',
+                paint: { 'line-color': '#FFC000', 'line-width': 12, 'line-opacity': 1.0 },
+                layout: { 'line-join': 'round', 'line-cap': 'round' }
+            }, 'rooms-3d');
+
+            map.addSource('path-labels', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: [
+                        { type: 'Feature', geometry: { type: 'Point', coordinates: [76.1085, 10.7023] }, properties: { label: 'Walking path' } },
+                        { type: 'Feature', geometry: { type: 'Point', coordinates: [76.1085, 10.7016] }, properties: { label: 'Walking path' } }
+                    ]
+                }
+            });
+            map.addLayer({
+                id: 'path-label-text', type: 'symbol', source: 'path-labels',
+                layout: { 'text-field': ['get', 'label'], 'text-size': 14, 'symbol-placement': 'point' },
+                paint: { 'text-color': '#000000', 'text-halo-color': '#FFC000', 'text-halo-width': 2 }
+            }, 'rooms-3d');
+
+            map.addSource('route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
+            map.addLayer({ id: 'route-outline', type: 'line', source: 'route', paint: { 'line-color': '#8ab4f8', 'line-width': 10, 'line-opacity': 0.3, 'line-blur': 4 }, layout: { 'line-join': 'round', 'line-cap': 'round' } });
+            map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#8ab4f8', 'line-width': 4, 'line-opacity': 1 } });
+
+            map.addSource('walker', { type: 'geojson', data: { type: 'Point', coordinates: [0, 0] } });
+            map.addLayer({
+                id: 'walker-dot', type: 'circle', source: 'walker',
+                paint: { 'circle-radius': 8, 'circle-color': '#ffffff', 'circle-stroke-width': 3, 'circle-stroke-color': '#8ab4f8' }
+            });
+        });
+
+        const tooltip = document.getElementById('hover-tooltip');
+        map.on('mousemove', 'rooms-3d', (e) => {
+            const props = e.features[0].properties;
+            if (props.height <= 1) return;
+            map.getCanvas().style.cursor = 'pointer';
+            document.getElementById('tt-name').innerText = props.name;
+            document.getElementById('tt-desc').innerText = props.description;
+            document.getElementById('tt-type').innerText = props.type;
+            document.getElementById('tt-type').style.backgroundColor = props.color;
+            tooltip.style.left = e.point.x + 'px'; tooltip.style.top = e.point.y + 'px'; tooltip.style.opacity = 1;
+        });
+        map.on('mouseleave', 'rooms-3d', () => { map.getCanvas().style.cursor = ''; tooltip.style.opacity = 0; });
+        map.on('click', 'rooms-3d', (e) => { 
+            if (e.features[0].properties.id) { 
+                document.getElementById('start-node').value = e.features[0].properties.id; 
+                // Log activity for admin
+                if (role === "admin") {
+                    const activity = {
+                        timestamp: new Date().toISOString(),
+                        location: e.features[0].properties.name,
+                        user: "admin"
+                    };
+                    let activities = JSON.parse(localStorage.getItem("activities") || "[]");
+                    activities.push(activity);
+                    localStorage.setItem("activities", JSON.stringify(activities));
+                    console.log("Admin accessed:", e.features[0].properties.name);
+                }
+            } 
+        });
+
+        // Math.atan2 outputting geographic compass headings (0=North, 90=East)
+        function getBearing(start, end) {
+            const dx = end[0] - start[0]; const dy = end[1] - start[1];
+            return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360;
+        }
+
+        // Enhanced Navigation Instructions Generator
+        function generateNavigationInstructions(shortestPath, start, end) {
+            const instructions = [];
+            const spokenInstructions = [];
+            
+            // Start instruction
+            const startInstruction = `Starting from ${nodes[start].name}, exit the room and move towards the corridor.`;
+            instructions.push({
+                icon: 'door_front',
+                text: `Exit <b>${nodes[start].name}</b>`,
+                spoken: `Starting from ${nodes[start].name}, exit the room and move towards the corridor.`
+            });
+            spokenInstructions.push(startInstruction);
+
+            // Process the path to find turns and landmarks
+            let currentDirection = null;
+            let landmarkBuffer = [];
+            
+            for (let i = 1; i < shortestPath.length - 1; i++) {
+                const currentNode = shortestPath[i];
+                const nextNode = shortestPath[i + 1];
+                const currentRoom = nodes[currentNode];
+                const nextRoom = nodes[nextNode];
+                
+                // Check if this is a significant landmark (not a corridor junction)
+                const isLandmark = !currentNode.includes('_') || 
+                                 ['n_lib', 's_conf', 's_prin', 's_rec', 's_ent'].includes(currentNode);
+                
+                if (isLandmark && currentRoom.name !== 'Open courtyard') {
+                    landmarkBuffer.push(currentRoom.name);
+                }
+                
+                // Calculate turn direction
+                const currentCoords = nodes[shortestPath[i-1]].coords;
+                const nextCoords = nodes[shortestPath[i]].coords;
+                const afterCoords = nodes[shortestPath[i+1]].coords;
+                
+                const bearing1 = getBearing(currentCoords, nextCoords);
+                const bearing2 = getBearing(nextCoords, afterCoords);
+                const diff = (bearing2 - bearing1 + 360) % 360;
+                
+                let turnDirection = null;
+                if (diff > 45 && diff < 160) {
+                    turnDirection = 'right';
+                } else if (diff > 200 && diff < 315) {
+                    turnDirection = 'left';
+                }
+                
+                // If we have landmarks and are approaching a turn, create instruction
+                if (turnDirection && landmarkBuffer.length > 0) {
+                    const landmarkText = landmarkBuffer.slice(-2).join(' and '); // Use last 2 landmarks
+                    const turnInstruction = `At the junction near ${landmarkText}, turn ${turnDirection}.`;
+                    
+                    instructions.push({
+                        icon: `turn_${turnDirection}`,
+                        text: `Turn <b>${turnDirection.charAt(0).toUpperCase() + turnDirection.slice(1)}</b> near ${landmarkText}`,
+                        spoken: turnInstruction
+                    });
+                    spokenInstructions.push(turnInstruction);
+                    
+                    landmarkBuffer = []; // Clear buffer after turn
+                }
+                // If we have landmarks but no turn coming, mention them as you pass
+                else if (landmarkBuffer.length > 0 && i % 3 === 0) { // Every few steps
+                    const landmarkText = landmarkBuffer[landmarkBuffer.length - 1];
+                    const passInstruction = `Continue walking. You will pass ${landmarkText} on your ${getRelativeDirection(bearing1)}.`;
+                    
+                    instructions.push({
+                        icon: 'straight',
+                        text: `Continue past <b>${landmarkText}</b>`,
+                        spoken: passInstruction
+                    });
+                    spokenInstructions.push(passInstruction);
+                    
+                    landmarkBuffer = landmarkBuffer.slice(-1); // Keep only the most recent
+                }
+            }
+            
+            // Destination instruction
+            const destinationInstruction = `When you see ${nodes[end].name} ahead, your destination has been reached.`;
+            instructions.push({
+                icon: 'place',
+                text: `Enter <b>${nodes[end].name}</b>`,
+                spoken: destinationInstruction,
+                color: '#81c995'
+            });
+            spokenInstructions.push(destinationInstruction);
+            
+            return { instructions, spokenInstructions };
+        }
+        
+        // Helper function to get relative direction
+        function getRelativeDirection(bearing) {
+            const directions = ['north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest'];
+            const index = Math.round(bearing / 45) % 8;
+            return directions[index];
+        }
+
+        function calculateRoute() {
+            const start = document.getElementById('start-node').value;
+            const end = document.getElementById('end-node').value;
+            if (!start || !end || start === end) return;
+            if (animationId) cancelAnimationFrame(animationId);
+
+            // --- DIJKSTRA'S ALGORITHM (True Shortest Geographic Path) ---
+            let distances = {};
+            let prev = {};
+            let unvisited = new Set(Object.keys(nodes));
+
+            for (let node in nodes) {
+                distances[node] = Infinity;
+                prev[node] = null;
+            }
+            distances[start] = 0;
+
+            while (unvisited.size > 0) {
+                let curr = null;
+                let minD = Infinity;
+                for (let node of unvisited) {
+                    if (distances[node] < minD) {
+                        minD = distances[node];
+                        curr = node;
+                    }
+                }
+
+                if (curr === null || curr === end) break;
+                unvisited.delete(curr);
+
+                (edges[curr] || []).forEach(neighbor => {
+                    if (unvisited.has(neighbor)) {
+                        let c1 = nodes[curr].coords;
+                        let c2 = nodes[neighbor].coords;
+                        // Calculate actual geographical meters between nodes
+                        let dist = Math.hypot(c2[0] - c1[0], c2[1] - c1[1]);
+                        let alt = distances[curr] + dist;
+                        if (alt < distances[neighbor]) {
+                            distances[neighbor] = alt;
+                            prev[neighbor] = curr;
+                        }
+                    }
+                });
+            }
+
+            let shortestPath = [];
+            let u = end;
+            if (prev[u] || u === start) {
+                while (u) {
+                    shortestPath.unshift(u);
+                    u = prev[u];
+                }
+            }
+
+            if (shortestPath.length > 0) {
+                const rawCoords = [];
+
+                // Strict Orthogonal Path Generation (Doors & Yellow Corridors ONLY)
+                for (let i = 0; i < shortestPath.length; i++) {
+                    let id = shortestPath[i];
+                    let cx = nodes[id].coords[0], cy = nodes[id].coords[1];
+
+                    let snapX = cx, snapY = cy;
+
+                    if (['n_cad', 'n_cc', 'n_pg', 'n_lib'].includes(id)) { snapY = 10.7023; }
+                    else if (['s_arts', 's_prin', 's_conf', 's_rec', 's_r0', 's_cash'].includes(id)) { snapY = 10.7016; }
+                    else if (['s_off', 's_adm', 's_meet', 's_trans', 's_acc'].includes(id)) { snapY = 10.70145; }
+                    else if (['n_chod', 'n_cfac', 'w_123', 'w_122', 'w_bt', 'w_st', 'w_119', 'w_gt'].includes(id)) { snapX = 76.10775; }
+                    else if (['n_ahod', 'n_afac', 'e_s1a', 'e_s1b', 'e_gt', 'e_sr', 'e_s1c', 'e_bt', 'e_s1d', 'e_s1e'].includes(id)) { snapX = 76.1094; }
+                    else if (['s_ao'].includes(id)) { snapX = 76.10912; }
+                    else if (id === 's_ent') { snapX = 76.10875; }
+
+                    if (i === 0) {
+                        rawCoords.push([cx, cy]);
+                        if (snapX !== cx || snapY !== cy) rawCoords.push([snapX, snapY]);
+                    }
+                    else if (i === shortestPath.length - 1) {
+                        if (snapX !== cx || snapY !== cy) rawCoords.push([snapX, snapY]);
+                        rawCoords.push([cx, cy]);
+                    }
+                    else {
+                        rawCoords.push([snapX, snapY]);
+                    }
+                }
+
+                // Filter out tiny micro-movements that confuse the Turn detector
+                const cleanCoords = [rawCoords[0]];
+                for (let i = 1; i < rawCoords.length; i++) {
+                    let prevCoord = cleanCoords[cleanCoords.length - 1];
+                    if (Math.abs(rawCoords[i][0] - prevCoord[0]) > 0.000001 || Math.abs(rawCoords[i][1] - prevCoord[1]) > 0.000001) {
+                        cleanCoords.push(rawCoords[i]);
+                    }
+                }
+
+                const lineString = turf.lineString(cleanCoords);
+                map.getSource('route').setData(lineString);
+
+                let totalDistanceMeters = turf.length(lineString, { units: 'meters' }) * 1500;
+                let walkTimeMins = Math.max(1, Math.round((totalDistanceMeters / 1.4) / 60));
+
+                document.getElementById('route-summary').style.display = 'flex';
+                document.getElementById('eta-text').innerHTML = `<span class="material-icons" style="font-size:16px; vertical-align:middle;">schedule</span> ${walkTimeMins} min`;
+                document.getElementById('dist-text').innerText = `${Math.round(totalDistanceMeters)} m`;
+
+                // Announce route summary
+                speak(`Route calculated. Distance: ${Math.round(totalDistanceMeters)} meters. Estimated time: ${walkTimeMins} minutes.`);
+
+                // Generate enhanced navigation instructions
+                const { instructions, spokenInstructions } = generateNavigationInstructions(shortestPath, start, end);
+                
+                // Display instructions in UI
+                const stepsDiv = document.getElementById('steps-container');
+                stepsDiv.innerHTML = '';
+                
+                instructions.forEach((step, index) => {
+                    const stepDiv = document.createElement('div');
+                    stepDiv.className = 'step';
+                    
+                    const iconSpan = document.createElement('span');
+                    iconSpan.className = 'icon material-icons';
+                    if (step.color) iconSpan.style.color = step.color;
+                    iconSpan.textContent = step.icon;
+                    
+                    const textSpan = document.createElement('span');
+                    textSpan.innerHTML = step.text;
+                    
+                    stepDiv.appendChild(iconSpan);
+                    stepDiv.appendChild(textSpan);
+                    stepsDiv.appendChild(stepDiv);
+                });
+
+                // Announce directions with enhanced instructions
+                setTimeout(() => {
+                    spokenInstructions.forEach((instruction, index) => {
+                        setTimeout(() => {
+                            speak(instruction);
+                        }, index * 3000); // 3 second delay between instructions
+                    });
+                }, 1000);
+
+                let denseCoords = [];
+                for (let i = 0; i < cleanCoords.length - 1; i++) {
+                    let startP = cleanCoords[i], endP = cleanCoords[i + 1];
+                    let dist = Math.hypot(endP[0] - startP[0], endP[1] - startP[1]);
+                    let steps = Math.max(10, Math.floor(dist * 100000));
+                    for (let j = 0; j < steps; j++) {
+                        denseCoords.push([
+                            startP[0] + (endP[0] - startP[0]) * (j / steps),
+                            startP[1] + (endP[1] - startP[1]) * (j / steps)
+                        ]);
+                    }
+                }
+                denseCoords.push(cleanCoords[cleanCoords.length - 1]);
+
+                let animationCounter = 0;
+                let lastAnnouncedStep = -1;
+
+                function animateWalker() {
+                    map.getSource('walker').setData({ type: 'Point', coordinates: denseCoords[animationCounter] });
+                    animationCounter += 2;
+                    if (animationCounter >= denseCoords.length) animationCounter = 0;
+                    animationId = requestAnimationFrame(animateWalker);
+                }
+                animateWalker();
+
+                map.flyTo({ center: cleanCoords[1], zoom: 19.5, pitch: 70, bearing: getBearing(cleanCoords[0], cleanCoords[1]), speed: 0.8 });
+            }
+        }
+
+        function viewActivities() {
+            const activities = JSON.parse(localStorage.getItem("activities") || "[]");
+            if (activities.length === 0) {
+                alert("No activities recorded yet.");
+                return;
+            }
+            let activityText = "User Activities:\n\n";
+            activities.forEach(act => {
+                activityText += `${act.timestamp} - ${act.user}: ${act.location}\n`;
+            });
+            alert(activityText);
+        }
+    </script>
+</body>
+
+</html>

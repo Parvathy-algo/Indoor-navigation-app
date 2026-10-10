@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>College Map - Candidate View</title>
+    <link href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css"rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { height: 100%; font-family: 'Roboto', sans-serif; overflow: hidden; background: #121212; touch-action: none; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; z-index: 1; }
+        #search-panel { position: absolute; top: 20px; left: 20px; width: 380px; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 28px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4); z-index: 10; color: white; padding: 10px; font-family: 'Plus Jakarta Sans', sans-serif; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .header { background: transparent; border-bottom: 1px solid rgba(255,255,255,0.1); padding: 20px; font-weight: 700; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: #a855f7; }
+        .drag-handle { display: none; width: 40px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 4px; margin: 0 auto 10px auto; }
+        .input-group { background: rgba(255,255,255,0.05); margin: 10px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); padding: 5px 15px; display: flex; align-items: center; gap: 10px; }
+        .input-group select { flex: 1; padding: 10px 0; border: none; background: transparent; color: white; font-weight: 500; font-size: 14px; outline: none; appearance: none; }
+        .input-group select option { background: #1e293b; color: white; }
+        .btn-directions { background: linear-gradient(90deg, #a855f7, #7e22ce); border: none; color: white; border-radius: 16px; margin: 15px 10px 5px 10px; height: 50px; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; box-shadow: 0 10px 20px rgba(168, 85, 247, 0.3); cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; transition: transform 0.2s, box-shadow 0.2s; }
+        .btn-directions:hover { transform: translateY(-2px); box-shadow: 0 15px 30px rgba(168, 85, 247, 0.5); }
+        .btn-tts { background: rgba(255,255,255,0.1); box-shadow: none; margin-top: 5px; margin-bottom: 15px; }
+        .btn-tts:hover { background: rgba(255,255,255,0.15); box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
+        #steps-container { max-height: 250px; overflow-y: auto; padding: 0 10px 10px 10px; font-size: 14px; color: rgba(255,255,255,0.7); }
+        .step { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; align-items: center; gap: 12px; }
+        .step:last-child { border-bottom: none; font-weight: 600; color: #a855f7; }
+        .step .icon { font-size: 20px; color: white; }
+        #hover-tooltip { position: absolute; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(10px); padding: 12px 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5); pointer-events: none; opacity: 0; transition: opacity 0.2s; z-index: 20; transform: translate(-50%, -120%); min-width: 160px; color: white; font-family: 'Plus Jakarta Sans', sans-serif; }
+        #hover-tooltip h4 { margin: 0 0 4px 0; font-size: 15px; }
+        #hover-tooltip p { margin: 0; font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.4; }
+        #hover-tooltip .type { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 10px; font-weight: bold; color: #202124; margin-bottom: 8px; }
+        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        .back-link { position: absolute; top: 25px; right: 25px; color: white; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 12px; text-decoration: none; font-size: 13px; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); transition: 0.3s; z-index: 100; }
+        .back-link:hover { background: rgba(255,255,255,0.2); }
+        #candidate-login-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: #0f172a; background-image: radial-gradient(at 0% 0%, rgba(168, 85, 247, 0.2) 0, transparent 50%), radial-gradient(at 100% 100%, rgba(79, 70, 229, 0.2) 0, transparent 50%); z-index: 9999; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .candidate-login-card { width: 100%; max-width: 420px; padding: 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 28px; background: rgba(255,255,255,0.04); box-shadow: 0 20px 50px rgba(0,0,0,0.5); text-align: center; color: white; }
+        .candidate-login-icon { width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; border: 1px solid rgba(168,85,247,0.4); border-radius: 22px; background: rgba(168,85,247,0.12); color: #c084fc; }
+        .candidate-login-card h1 { margin-bottom: 10px; font-size: 26px; }
+        .candidate-login-card p { margin-bottom: 24px; color: rgba(255,255,255,0.65); font-size: 14px; line-height: 1.5; }
+        .candidate-login-card label { display: block; margin-bottom: 8px; color: rgba(255,255,255,0.8); text-align: left; font-size: 13px; font-weight: 600; }
+        .candidate-login-input { width: 100%; margin-bottom: 16px; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; outline: none; background: rgba(255,255,255,0.06); color: white; font: inherit; font-size: 16px; text-transform: uppercase; }
+        .candidate-login-input:focus { border-color: #c084fc; box-shadow: 0 0 0 3px rgba(192,132,252,0.2); }
+        .candidate-login-input::placeholder { color: rgba(255,255,255,0.35); }
+        .candidate-login-submit { width: 100%; padding: 14px; border: 0; border-radius: 12px; background: linear-gradient(135deg, #a855f7, #7e22ce); color: white; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+        .candidate-login-submit:hover { filter: brightness(1.1); }
+        #candidate-login-error { display: none; margin: 0 0 16px; color: #fca5a5; font-size: 13px; text-align: left; }
+        #candidate-home-link { z-index: 10001; }
+        :root { color-scheme: dark; --candidate-accent: #c084fc; --candidate-glass: rgba(15, 23, 42, 0.82); }
+        body, html { font-family: 'Plus Jakarta Sans', sans-serif; background: #080b15; }
+        #map { background: radial-gradient(circle at 50% 45%, #20243a 0, #101321 58%, #090b12 100%); }
+        #search-panel { top: 24px; left: 24px; gap: 4px; width: min(390px, calc(100vw - 48px)); max-height: calc(100vh - 48px); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid rgba(255,255,255,0.14); border-radius: 24px; background: var(--candidate-glass); box-shadow: 0 24px 70px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.08); backdrop-filter: blur(28px); -webkit-backdrop-filter: blur(28px); }
+        .header { padding: 16px 15px 18px; border-bottom-color: rgba(255,255,255,0.12); color: #e9d5ff; font-size: 15px; }
+        .header .material-icons { font-size: 22px; }
+        .input-group { min-height: 54px; margin: 8px 4px; padding: 5px 14px; border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.055); transition: border-color 180ms ease, background 180ms ease, transform 180ms ease; }
+        .input-group:focus-within { border-color: rgba(192,132,252,0.72); background: rgba(168,85,247,0.1); transform: translateY(-1px); }
+        .input-group select { min-width: 0; color: #f8fafc; cursor: pointer; }
+        .input-group select:focus-visible { outline: none; }
+        .route-tools { display: flex; gap: 8px; margin: 2px 4px 4px; }
+        .route-tool { display: inline-flex; min-height: 38px; flex: 1; align-items: center; justify-content: center; gap: 7px; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; background: rgba(255,255,255,0.055); color: rgba(255,255,255,0.78); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: border-color 180ms ease, color 180ms ease, background 180ms ease, transform 180ms ease; }
+        .route-tool .material-icons { font-size: 17px; }
+        .route-tool:hover:not(:disabled) { transform: translateY(-1px); border-color: rgba(192,132,252,0.45); background: rgba(168,85,247,0.12); color: white; }
+        .route-tool:disabled { cursor: not-allowed; opacity: 0.45; }
+        .btn-directions { min-height: 50px; margin: 8px 4px 5px; border-radius: 14px; background: linear-gradient(110deg, #a855f7, #7e22ce 58%, #6d28d9); box-shadow: 0 9px 24px rgba(126,34,206,0.32); text-transform: none; letter-spacing: 0.2px; }
+        .btn-directions:hover { transform: translateY(-2px); box-shadow: 0 13px 28px rgba(168,85,247,0.42); }
+        .btn-directions:active, .route-tool:active, .candidate-login-submit:active { transform: translateY(0) scale(0.985); }
+        .btn-tts { margin-top: 5px; margin-bottom: 7px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.07); color: #e9d5ff; box-shadow: none; }
+        .btn-tts:hover { background: rgba(255,255,255,0.12); box-shadow: 0 6px 18px rgba(0,0,0,0.2); }
+        #route-feedback { min-height: 18px; margin: 2px 8px 5px; color: rgba(255,255,255,0.7); font-size: 12px; line-height: 1.5; }
+        #route-feedback[data-state="error"] { color: #fda4af; }
+        #route-feedback[data-state="success"] { color: #d8b4fe; }
+        #steps-container { max-height: 220px; padding: 0 9px 9px; color: rgba(255,255,255,0.78); }
+        .step { padding: 11px 2px; border-bottom-color: rgba(255,255,255,0.075); }
+        .step .icon { color: #d8b4fe; }
+        .step:last-child { color: #e9d5ff; }
+        #hover-tooltip { border-color: rgba(216,180,254,0.3); background: rgba(15,23,42,0.94); box-shadow: 0 14px 38px rgba(0,0,0,0.4); }
+        .back-link { top: 24px; right: 24px; padding: 10px 15px; border-color: rgba(255,255,255,0.16); background: rgba(15,23,42,0.72); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+        .back-link:hover { transform: translateY(-2px); border-color: rgba(216,180,254,0.4); background: rgba(126,34,206,0.55); }
+        #candidate-login-overlay { overflow-y: auto; background: radial-gradient(ellipse at 18% 18%, rgba(168,85,247,0.28), transparent 36%), radial-gradient(ellipse at 86% 78%, rgba(79,70,229,0.26), transparent 38%), #090b16; }
+        .candidate-login-card { position: relative; overflow: hidden; padding: 44px 42px; border-color: rgba(255,255,255,0.16); border-radius: 30px; background: linear-gradient(145deg, rgba(255,255,255,0.09), rgba(255,255,255,0.035)); box-shadow: 0 30px 90px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.1); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); animation: candidate-card-enter 550ms cubic-bezier(0.2,0.75,0.25,1) both; }
+        .candidate-login-card::before { position: absolute; top: 0; left: 12%; width: 76%; height: 1px; background: linear-gradient(90deg, transparent, rgba(216,180,254,0.8), transparent); content: ""; }
+        .candidate-login-icon { width: 76px; height: 76px; border-radius: 24px; box-shadow: 0 12px 34px rgba(168,85,247,0.2); animation: candidate-icon-glow 3s ease-in-out infinite; }
+        .candidate-login-card h1 { letter-spacing: -0.7px; }
+        .candidate-login-card p { max-width: 310px; margin-right: auto; margin-left: auto; }
+        .candidate-login-card label { margin-bottom: 9px; }
+        .candidate-login-input { height: 54px; margin-bottom: 16px; border-radius: 14px; transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease; }
+        .candidate-login-input:hover { border-color: rgba(255,255,255,0.28); }
+        .candidate-login-input:focus { border-color: #c084fc; background: rgba(255,255,255,0.09); box-shadow: 0 0 0 4px rgba(192,132,252,0.15); }
+        .candidate-login-input[aria-invalid="true"] { border-color: #fb7185; box-shadow: 0 0 0 3px rgba(251,113,133,0.12); }
+        .candidate-login-submit { min-height: 52px; border-radius: 14px; background: linear-gradient(110deg, #a855f7, #7e22ce 60%, #6d28d9); box-shadow: 0 9px 24px rgba(126,34,206,0.3); transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease; }
+        .candidate-login-submit:hover { transform: translateY(-2px); filter: brightness(1.12); box-shadow: 0 14px 30px rgba(168,85,247,0.38); }
+        #candidate-login-error { max-width: 100%; margin: 0 0 14px; }
+        :focus-visible { outline: 2px solid #d8b4fe; outline-offset: 3px; }
+        .maplibregl-ctrl-group { overflow: hidden; border: 1px solid rgba(255,255,255,0.12) !important; border-radius: 12px !important; background: rgba(15,23,42,0.82) !important; box-shadow: 0 8px 24px rgba(0,0,0,0.28) !important; backdrop-filter: blur(12px); }
+        .maplibregl-ctrl-group button { background-color: transparent !important; }
+        .maplibregl-ctrl-group button:hover { background-color: rgba(255,255,255,0.1) !important; }
+        @keyframes candidate-card-enter { from { opacity: 0; transform: translateY(18px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes candidate-icon-glow { 0%, 100% { box-shadow: 0 10px 28px rgba(168,85,247,0.16); } 50% { box-shadow: 0 12px 38px rgba(168,85,247,0.34); } }
+        @media (max-width: 768px) {
+            #search-panel { top: auto; bottom: 0; left: 0; width: 100vw; max-height: min(68vh, 620px); padding: 10px 14px max(12px, env(safe-area-inset-bottom)); border: 1px solid rgba(255,255,255,0.12); border-bottom: 0; border-radius: 26px 26px 0 0; }
+            .header { padding: 8px 10px 14px; flex-direction: column; }
+            .drag-handle { display: block; margin-bottom: 9px; }
+            #steps-container { max-height: 22vh; }
+            .back-link { top: 15px; right: 15px; }
+            .maplibregl-ctrl-top-right { top: 58px; }
+        }
+        @media (max-width: 480px) {
+            .candidate-login-card { padding: 34px 24px; border-radius: 24px; }
+            .candidate-login-card h1 { font-size: 24px; }
+            #search-panel { max-height: 72vh; }
+            .route-tool { font-size: 11px; }
+        }
+        #search-panel { animation: candidate-panel-enter 600ms cubic-bezier(0.2, 0.75, 0.25, 1) both; }
+        .back-link { animation: candidate-link-enter 500ms 180ms ease-out both; }
+        .step { animation: candidate-step-enter 300ms ease-out both; }
+        .btn-directions .material-icons, .route-tool .material-icons { transition: transform 200ms ease; }
+        .btn-directions:hover .material-icons { transform: scale(1.12); }
+        .route-tool:hover:not(:disabled) .material-icons { transform: rotate(-8deg); }
+        @keyframes candidate-panel-enter { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes candidate-link-enter { from { opacity: 0; translate: 0 -8px; } to { opacity: 1; translate: 0 0; } }
+        @keyframes candidate-step-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body>
+    <a id="candidate-home-link" href="index.html" class="back-link">&larr; Return to Home Page</a>
+    <div id="candidate-login-overlay">
+        <section class="candidate-login-card" aria-labelledby="candidate-login-title">
+            <div class="candidate-login-icon"><span class="material-icons" aria-hidden="true">history_edu</span></div>
+            <h1 id="candidate-login-title">Candidate Login</h1>
+            <p>Enter your exam roll number to access candidate navigation.</p>
+            <form id="candidate-login-form" novalidate>
+                <label for="candidate-roll-number">Exam roll number</label>
+                <input id="candidate-roll-number" class="candidate-login-input" type="text" maxlength="14" autocomplete="off" autocapitalize="characters" spellcheck="false" required>
+                <p id="candidate-login-error" role="alert" aria-live="polite"></p>
+                <button class="candidate-login-submit" type="submit">Continue</button>
+            </form>
+        </section>
+    </div>
+    <div id="search-panel">
+        <div class="header">
+            <div class="drag-handle"></div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-icons">history_edu</span> Candidate Navigation
+            </div>
+        </div>
+        <div class="input-group">
+            <span class="material-icons" style="color: rgba(255,255,255,0.6);">my_location</span>
+            <select id="start-node"><option value="">Choose starting point...</option></select>
+        </div>
+        <div class="input-group">
+            <span class="material-icons" style="color: #a855f7;">location_on</span>
+            <select id="end-node"><option value="">Choose destination...</option></select>
+        </div>
+        <div class="route-tools">
+            <button id="swap-locations-btn" class="route-tool" type="button" aria-label="Swap starting point and destination">
+                <span class="material-icons" aria-hidden="true">swap_vert</span> Swap locations
+            </button>
+            <button id="clear-route-btn" class="route-tool" type="button">
+                <span class="material-icons" aria-hidden="true">restart_alt</span> Clear route
+            </button>
+        </div>
+        <button class="btn-directions" onclick="calculateRoute()">
+            <span class="material-icons">directions</span> Show Route
+        </button>
+        <button id="tts-toggle-btn" class="btn-directions btn-tts" onclick="toggleTTS()">
+            <span class="material-icons">volume_up</span> Voice Guide: On
+        </button>
+        <p id="route-feedback" role="status" aria-live="polite"></p>
+        <div id="steps-container"></div>
+    </div>
+    <div id="hover-tooltip">
+        <span class="type" id="tt-type">Classroom</span><h4 id="tt-name">Room Name</h4><p id="tt-desc">Description goes here...</p>
+    </div>
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+    <script>
+        const role = "candidate";
+        const candidateRollNumbers = new Set(
+            Array.from({ length: 60 }, (_, index) => `EXAM2026CSE${String(index + 1).padStart(3, "0")}`)
+        );
+
+        document.getElementById("candidate-login-form").addEventListener("submit", function (event) {
+            event.preventDefault();
+
+            const rollNumberInput = document.getElementById("candidate-roll-number");
+            const rollNumber = rollNumberInput.value.trim().toUpperCase();
+            const errorMessage = document.getElementById("candidate-login-error");
+            let error = "";
+
+            if (!rollNumber) {
+                error = "Please enter your exam roll number.";
+            } else if (!rollNumber.startsWith("EXAM")) {
+                error = "Your roll number must start with EXAM.";
+            } else if (!rollNumber.includes("2026")) {
+                error = "Your roll number must include 2026.";
+            } else if (!/^EXAM2026CSE\d{3}$/.test(rollNumber)) {
+                error = "Enter a valid roll number in the format EXAM2026CSE001.";
+            } else if (!candidateRollNumbers.has(rollNumber)) {
+                error = "No candidate record was found for that roll number.";
+            }
+
+            if (error) {
+                errorMessage.textContent = error;
+                errorMessage.style.display = "block";
+                rollNumberInput.setAttribute("aria-invalid", "true");
+                rollNumberInput.focus();
+                return;
+            }
+
+            errorMessage.textContent = "";
+            errorMessage.style.display = "none";
+            rollNumberInput.removeAttribute("aria-invalid");
+            document.getElementById("candidate-login-overlay").style.display = "none";
+        });
+        
+        // --- TEXT TO SPEECH LOGIC ---
+        let speechSynthesis = window.speechSynthesis;
+        let isTTSEnabled = localStorage.getItem("ttsEnabled") !== "false"; 
+        let voices = [];
+        function loadVoices() { voices = speechSynthesis.getVoices(); }
+        if (speechSynthesis.onvoiceschanged !== undefined) { speechSynthesis.onvoiceschanged = loadVoices; }
+        loadVoices(); 
+
+        function speak(text) {
+            if (!isTTSEnabled || !speechSynthesis) return;
+            try {
+                speechSynthesis.cancel();
+                if (voices.length === 0) loadVoices();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                if (voices.length > 0) {
+                    const preferred = voices.find(voice => voice.lang === 'en-US') || voices.find(voice => voice.lang.startsWith('en'));
+                    if (preferred) utterance.voice = preferred;
+                }
+                utterance.rate = 0.9; utterance.pitch = 1; utterance.volume = 1;
+                speechSynthesis.speak(utterance);
+            } catch (error) { console.error("Error in speech synthesis:", error); }
+        }
+
+        function toggleTTS() {
+            isTTSEnabled = !isTTSEnabled;
+            localStorage.setItem("ttsEnabled", isTTSEnabled);
+            const btn = document.getElementById('tts-toggle-btn');
+            btn.innerHTML = isTTSEnabled ? '<span class="material-icons">volume_up</span> Voice Guide: On' : '<span class="material-icons">volume_off</span> Voice Guide: Off';
+            if (isTTSEnabled) speak("Voice guidance enabled");
+        }
+
+        const map = new maplibregl.Map({ container: 'map', style: { version: 8, sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#11141a' } }] }, center: [76.10800, 10.70200], zoom: 18.5, pitch: 60, bearing: -20 });
+
+        const features = []; const nodes = {}; const edges = {};
+        const allowedIds = [ 's_ent', 'w_123', 'w_122', 'w_119', 'e_s1a', 'e_s1b', 'e_s1c', 'e_s1d', 'e_s1e', 's_arts', 'w_bt', 'w_gt', 'e_gt', 'e_bt', 'n_cad', 'n_cc', 'n_pg' ];
+
+        function addPoly(id, name, desc, type, color, h, w, s, e, n) {
+            let isAllowed = allowedIds.includes(id);
+            let displayName = isAllowed ? name : '🔒 Locked';
+            let displayDesc = isAllowed ? desc : 'Unauthorized Access';
+            let displayColor = isAllowed ? color : '#3c4043';
+
+            features.push({ type: "Feature", properties: { id, name: displayName, description: displayDesc, height: h, color: displayColor, type }, geometry: { type: "Polygon", coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] } });
+            nodes[id] = { name: displayName, coords: [(w + e) / 2, (s + n) / 2] };
+        }
+
+        const cLab = '#1967d2', cAdmin = '#c5221f', cStudy = '#f29900', cClass = '#4c4443', cSci = '#1e8e3e', cFacil = '#5f6348', cHall = '#8e24aa';
+        addPoly('yard', 'Open courtyard', 'Central open space', 'Outdoor', '#1e2b22', 0.1, 76.1078, 10.70175, 76.1093, 10.70225);
+        addPoly('n_chod', 'Civil HOD Room', 'Head of Civil Dept', 'Admin', cAdmin, 5, 76.10785, 10.70238, 76.10805, 10.7025);
+        addPoly('n_cfac', 'Civil Faculty Room', 'Civil Staff', 'Admin', cAdmin, 5, 76.10785, 10.70226, 76.10805, 10.70237);
+        addPoly('n_cad', 'CAD Lab', 'Computer Aided Design', 'Lab', cLab, 5, 76.1081, 10.70226, 76.1083, 10.7025);
+        addPoly('n_cc', 'CC Lab', 'Computing Center', 'Lab', cLab, 5, 76.10835, 10.70226, 76.10855, 10.7025);
+        addPoly('n_pg', 'PG Research Center', 'Postgrad Research', 'Study', cStudy, 5, 76.1086, 10.70226, 76.10885, 10.7025);
+        addPoly('n_lib', 'LIBRARY', 'Main Library', 'Study', cStudy, 6, 76.1089, 10.70226, 76.10915, 10.7025);
+        addPoly('n_ahod', 'ASH HOD Room', 'Applied Science HOD', 'Admin', cAdmin, 5, 76.1092, 10.70238, 76.10935, 10.7025);
+        addPoly('n_afac', 'ASH Faculty Room', 'Applied Science Staff', 'Admin', cAdmin, 5, 76.1092, 10.70226, 76.10935, 10.70237);
+        addPoly('w_123', '123 CE S3 S4', 'Civil Class', 'Class', cClass, 5, 76.1074, 10.70235, 76.10765, 10.7025);
+        addPoly('w_122', '122 CE S5 S6', 'Civil Class', 'Class', cClass, 5, 76.1074, 10.70215, 76.10765, 10.7023);
+        addPoly('w_bt', 'Boys Toilet', 'Restroom', 'Facility', cFacil, 5, 76.1074, 10.7020, 76.10765, 10.7021);
+        addPoly('w_st', 'Store', 'Supplies', 'Facility', cFacil, 5, 76.1074, 10.70185, 76.10765, 10.70195);
+        addPoly('w_119', '119 CE S8 S7', 'Civil Class', 'Class', cClass, 5, 76.1074, 10.70165, 76.10765, 10.7018);
+        addPoly('w_gt', 'Girls Toilet', 'Restroom', 'Facility', cFacil, 5, 76.1074, 10.7015, 76.10765, 10.7016);
+        addPoly('e_s1a', 'S1/S2 Class (N)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70235, 76.1097, 10.7025);
+        addPoly('e_s1b', 'S1/S2 Class (NM)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70215, 76.1097, 10.7023);
+        addPoly('e_gt', 'Girls Toilet', 'Restroom', 'Facility', cFacil, 5, 76.10945, 10.7020, 76.1097, 10.7021);
+        addPoly('e_sr', 'Sick Room', 'Medical Aid', 'Facility', cFacil, 5, 76.10945, 10.7018, 76.1097, 10.70195);
+        addPoly('e_s1c', 'S1/S2 Class (SM)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.7016, 76.1097, 10.70175);
+        addPoly('e_bt', 'Boys Toilet', 'Restroom', 'Facility', cFacil, 5, 76.10945, 10.70145, 76.1097, 10.70155);
+        addPoly('e_s1d', 'S1/S2 Class (SE Top)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70125, 76.1097, 10.7014);
+        addPoly('e_s1e', 'S1/S2 Class (SE Bot)', 'First Year Class', 'Class', cClass, 5, 76.10945, 10.70105, 76.1097, 10.7012);
+        addPoly('s_arts', 'ARTS', 'Arts Block', 'Class', cHall, 6, 76.1073, 10.7012, 76.1077, 10.70145);
+        addPoly('s_prin', 'PRINCIPAL ROOM', 'Principal Office', 'Admin', cAdmin, 5, 76.10775, 10.70155, 76.1081, 10.7017);
+        addPoly('s_off', 'OFFICE', 'Main Office', 'Admin', cAdmin, 5, 76.10775, 10.70135, 76.10795, 10.7015);
+        addPoly('s_adm', 'Admission', 'Admissions Office', 'Admin', cAdmin, 5, 76.1080, 10.70135, 76.10815, 10.7015);
+        addPoly('s_conf', 'Conference Hall', 'Meetings & Events', 'Hall', cHall, 5, 76.1082, 10.70155, 76.1086, 10.7017);
+        addPoly('s_meet', 'Meeting Room', 'Small Meetings', 'Hall', cHall, 5, 76.1082, 10.70135, 76.1086, 10.70145);
+        addPoly('s_rec', 'Reception', 'Front Desk', 'Admin', cAdmin, 5, 76.10865, 10.70155, 76.10885, 10.7017);
+        addPoly('s_ent', 'Entrance', 'Main Gate', 'Facility', cFacil, 3, 76.10865, 10.7013, 76.10885, 10.7014);
+        addPoly('s_r0', 'Room 0', 'Admin Room 0', 'Admin', cAdmin, 5, 76.1089, 10.70155, 76.1091, 10.7017);
+        addPoly('s_trans', 'Transportation', 'Transport Office', 'Admin', cAdmin, 5, 76.1089, 10.70135, 76.10905, 10.70145);
+        addPoly('s_ao', 'AO', 'Administrative Officer', 'Admin', cAdmin, 5, 76.1091, 10.70135, 76.1092, 10.70145);
+        addPoly('s_cash', 'Cash Counter', 'Payments', 'Admin', cAdmin, 5, 76.10915, 10.70155, 76.10935, 10.7017);
+        addPoly('s_acc', 'Account Office', 'Accounts Dept', 'Admin', cAdmin, 5, 76.1092, 10.70135, 76.1094, 10.7015);
+
+        nodes['nw'] = { name: "NW Corner", coords: [76.10775, 10.7023] }; nodes['ne'] = { name: "NE Corner", coords: [76.1094, 10.7023] }; nodes['se'] = { name: "SE Corner", coords: [76.1094, 10.7016] }; nodes['sw'] = { name: "SW Corner", coords: [76.10775, 10.7016] }; nodes['j_nw_top'] = { name: "NW Top Junction", coords: [76.10775, 10.7024] }; nodes['j_tr_1'] = { name: "NE Top Junction", coords: [76.1094, 10.7024] }; nodes['j_s1'] = { name: "Path Junction", coords: [76.10815, 10.7016] }; nodes['j_s2'] = { name: "Path Junction", coords: [76.10875, 10.7016] }; nodes['j_s3'] = { name: "Path Junction", coords: [76.10912, 10.7016] }; nodes['j_sub1'] = { name: "Path Junction", coords: [76.10815, 10.70145] }; nodes['j_sub2'] = { name: "Path Junction", coords: [76.10875, 10.70145] }; nodes['j_sub3'] = { name: "Path Junction", coords: [76.10912, 10.70145] };
+
+        function linkPath(pathArray) {
+            for (let i = 0; i < pathArray.length - 1; i++) {
+                let a = pathArray[i]; let b = pathArray[i + 1];
+                if (!edges[a]) edges[a] = []; if (!edges[b]) edges[b] = [];
+                if (!edges[a].includes(b)) edges[a].push(b); if (!edges[b].includes(a)) edges[b].push(a);
+            }
+        }
+
+        linkPath(['nw', 'n_cad', 'n_cc', 'n_pg', 'n_lib', 'ne']); linkPath(['s_arts', 'sw', 's_prin', 'j_s1', 's_conf', 'j_s2', 's_rec', 's_r0', 'j_s3', 's_cash', 'se']); linkPath(['s_off', 's_adm', 'j_sub1', 's_meet', 'j_sub2', 's_trans', 'j_sub3', 's_acc']); linkPath(['n_chod', 'w_123', 'j_nw_top', 'n_cfac', 'nw', 'w_122', 'w_bt', 'w_st', 'w_119', 'sw', 'w_gt']); linkPath(['n_ahod', 'e_s1a', 'j_tr_1', 'n_afac', 'ne', 'e_s1b', 'e_gt', 'e_sr', 'e_s1c', 'se', 'e_bt', 'e_s1d', 'e_s1e']); linkPath(['j_s1', 'j_sub1']); linkPath(['j_s2', 'j_sub2', 's_ent']); linkPath(['j_s3', 'j_sub3', 's_ao']);
+
+        const startSelect = document.getElementById('start-node'); const endSelect = document.getElementById('end-node');
+        allowedIds.forEach(id => { startSelect.add(new Option(nodes[id].name, id)); endSelect.add(new Option(nodes[id].name, id)); });
+        const defaultStartIndex = allowedIds.indexOf('s_ent');
+        if(defaultStartIndex > -1) startSelect.selectedIndex = defaultStartIndex;
+
+        let animationId = null;
+        const routeFeedback = document.getElementById('route-feedback');
+
+        document.getElementById('swap-locations-btn').addEventListener('click', () => {
+            const start = startSelect.value;
+            startSelect.value = endSelect.value;
+            endSelect.value = start;
+            if (document.querySelector('#steps-container .step')) {
+                calculateRoute();
+                return;
+            }
+            routeFeedback.textContent = 'Starting point and destination swapped.';
+            routeFeedback.dataset.state = 'success';
+        });
+
+        document.getElementById('clear-route-btn').addEventListener('click', () => {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            const routeSource = map.getSource('route');
+            const walkerSource = map.getSource('walker');
+            if (routeSource) routeSource.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [] } });
+            if (walkerSource) walkerSource.setData({ type: 'Point', coordinates: [0, 0] });
+            document.getElementById('steps-container').replaceChildren();
+            routeFeedback.textContent = 'Route cleared. Choose locations to plan another route.';
+            routeFeedback.dataset.state = '';
+        });
+
+        [startSelect, endSelect].forEach(select => {
+            select.addEventListener('change', () => {
+                routeFeedback.textContent = '';
+                routeFeedback.dataset.state = '';
+            });
+        });
+
+        map.on('load', () => {
+            map.addSource('campus', { type: 'geojson', data: { type: "FeatureCollection", features } });
+            map.addLayer({ id: 'rooms-3d', type: 'fill-extrusion', source: 'campus', paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-opacity': 0.75 } });
+            map.addLayer({ id: 'room-labels', type: 'symbol', source: 'campus', filter: ['>', ['get', 'height'], 1], layout: { 'text-field': ['get', 'name'], 'text-size': 11, 'text-anchor': 'center' }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#000000', 'text-halo-width': 1.5 } });
+            map.addSource('corridors', { type: 'geojson', data: { type: 'FeatureCollection', features: [ { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10775, 10.7023], [76.1094, 10.7023], [76.1094, 10.7016], [76.10775, 10.7016], [76.10775, 10.7023]] } }, { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10775, 10.7023], [76.10775, 10.7025]] } }, { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.1094, 10.7023], [76.1094, 10.7025]] } }, { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10815, 10.7016], [76.10815, 10.70135]] } }, { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10815, 10.70145], [76.10912, 10.70145]] } }, { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10875, 10.7016], [76.10875, 10.7013]] } }, { type: 'Feature', geometry: { type: 'LineString', coordinates: [[76.10912, 10.7016], [76.10912, 10.70135]] } } ] } });
+            map.addLayer({ id: 'corridor-lines-outline', type: 'line', source: 'corridors', paint: { 'line-color': '#000000', 'line-width': 16, 'line-opacity': 0.8 }, layout: { 'line-join': 'round', 'line-cap': 'round' } }, 'rooms-3d');
+            map.addLayer({ id: 'corridor-lines-fill', type: 'line', source: 'corridors', paint: { 'line-color': '#FFC000', 'line-width': 12, 'line-opacity': 1.0 }, layout: { 'line-join': 'round', 'line-cap': 'round' } }, 'rooms-3d');
+            map.addSource('route', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } } });
+            map.addLayer({ id: 'route-outline', type: 'line', source: 'route', paint: { 'line-color': '#a855f7', 'line-width': 10, 'line-opacity': 0.3, 'line-blur': 4 }, layout: { 'line-join': 'round', 'line-cap': 'round' } });
+            map.addLayer({ id: 'route-line', type: 'line', source: 'route', paint: { 'line-color': '#a855f7', 'line-width': 4, 'line-opacity': 1 } });
+            map.addSource('walker', { type: 'geojson', data: { type: 'Point', coordinates: [0, 0] } });
+            map.addLayer({ id: 'walker-dot', type: 'circle', source: 'walker', paint: { 'circle-radius': 8, 'circle-color': '#ffffff', 'circle-stroke-width': 3, 'circle-stroke-color': '#a855f7' } });
+        });
+
+        const tooltip = document.getElementById('hover-tooltip');
+        map.on('mousemove', 'rooms-3d', (e) => {
+            const props = e.features[0].properties; if (props.height <= 1) return;
+            map.getCanvas().style.cursor = 'pointer'; document.getElementById('tt-name').innerText = props.name; document.getElementById('tt-desc').innerText = props.description; document.getElementById('tt-type').innerText = props.type; document.getElementById('tt-type').style.backgroundColor = props.color;
+            tooltip.style.left = e.point.x + 'px'; tooltip.style.top = e.point.y + 'px'; tooltip.style.opacity = 1;
+        });
+        map.on('mouseleave', 'rooms-3d', () => { map.getCanvas().style.cursor = ''; tooltip.style.opacity = 0; });
+        
+        // --- ACTIVITY TRACKER (CLICKS) ---
+        map.on('click', 'rooms-3d', (e) => { 
+            const clickedId = e.features[0].properties.id;
+            if (clickedId && allowedIds.includes(clickedId)) { 
+                document.getElementById('start-node').value = clickedId; 
+                routeFeedback.textContent = `Starting point set to ${nodes[clickedId].name}.`;
+                routeFeedback.dataset.state = 'success';
+                const activity = { timestamp: new Date().toLocaleString(), location: `Clicked on ${e.features[0].properties.name}`, user: role };
+                let activities = JSON.parse(localStorage.getItem("activities") || "[]");
+                activities.push(activity); if(activities.length > 100) activities.shift(); localStorage.setItem("activities", JSON.stringify(activities));
+            } else if (clickedId) { alert("Access Restricted: Candidates can only select allowed labs, exam halls, and facilities."); }
+        });
+
+        function getBearing(start, end) { const dx = end[0] - start[0]; const dy = end[1] - start[1]; return (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360; }
+
+        // --- ROUTING & ANIMATION LOGIC ---
+        function calculateRoute() {
+            const start = document.getElementById('start-node').value; const end = document.getElementById('end-node').value;
+            if (!map.getSource('route') || !map.getSource('walker')) {
+                routeFeedback.textContent = 'The map is still loading. Please try again in a moment.';
+                routeFeedback.dataset.state = 'error';
+                return;
+            }
+            if (!start || !end) {
+                routeFeedback.textContent = 'Choose both a starting point and destination.';
+                routeFeedback.dataset.state = 'error';
+                return;
+            }
+            if (start === end) {
+                routeFeedback.textContent = 'Choose two different locations to plan a route.';
+                routeFeedback.dataset.state = 'error';
+                return;
+            }
+            routeFeedback.textContent = '';
+            routeFeedback.dataset.state = '';
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            let distances = {}; let prev = {}; let unvisited = new Set(Object.keys(nodes));
+            for (let node in nodes) { distances[node] = Infinity; prev[node] = null; }
+            distances[start] = 0;
+            while (unvisited.size > 0) {
+                let curr = null; let minD = Infinity;
+                for (let node of unvisited) { if (distances[node] < minD) { minD = distances[node]; curr = node; } }
+                if (curr === null || curr === end) break; unvisited.delete(curr);
+                (edges[curr] || []).forEach(neighbor => {
+                    if (unvisited.has(neighbor)) {
+                        let c1 = nodes[curr].coords; let c2 = nodes[neighbor].coords; let dist = Math.hypot(c2[0] - c1[0], c2[1] - c1[1]); let alt = distances[curr] + dist;
+                        if (alt < distances[neighbor]) { distances[neighbor] = alt; prev[neighbor] = curr; }
+                    }
+                });
+            }
+            let shortestPath = []; let u = end;
+            if (prev[u] || u === start) { while (u) { shortestPath.unshift(u); u = prev[u]; } }
+            if (shortestPath.length > 0) {
+                const rawCoords = [];
+                for (let i = 0; i < shortestPath.length; i++) {
+                    let id = shortestPath[i]; let cx = nodes[id].coords[0], cy = nodes[id].coords[1]; let snapX = cx, snapY = cy;
+                    if (['n_cad', 'n_cc', 'n_pg', 'n_lib'].includes(id)) { snapY = 10.7023; } else if (['s_arts', 's_prin', 's_conf', 's_rec', 's_r0', 's_cash'].includes(id)) { snapY = 10.7016; } else if (['s_off', 's_adm', 's_meet', 's_trans', 's_acc'].includes(id)) { snapY = 10.70145; } else if (['n_chod', 'n_cfac', 'w_123', 'w_122', 'w_bt', 'w_st', 'w_119', 'w_gt'].includes(id)) { snapX = 76.10775; } else if (['n_ahod', 'n_afac', 'e_s1a', 'e_s1b', 'e_gt', 'e_sr', 'e_s1c', 'e_bt', 'e_s1d', 'e_s1e'].includes(id)) { snapX = 76.1094; } else if (['s_ao'].includes(id)) { snapX = 76.10912; } else if (id === 's_ent') { snapX = 76.10875; }
+                    if (i === 0) { rawCoords.push([cx, cy]); if (snapX !== cx || snapY !== cy) rawCoords.push([snapX, snapY]); } else if (i === shortestPath.length - 1) { if (snapX !== cx || snapY !== cy) rawCoords.push([snapX, snapY]); rawCoords.push([cx, cy]); } else { rawCoords.push([snapX, snapY]); }
+                }
+                const cleanCoords = [rawCoords[0]];
+                for (let i = 1; i < rawCoords.length; i++) { let prevCoord = cleanCoords[cleanCoords.length - 1]; if (Math.abs(rawCoords[i][0] - prevCoord[0]) > 0.000001 || Math.abs(rawCoords[i][1] - prevCoord[1]) > 0.000001) { cleanCoords.push(rawCoords[i]); } }
+                const lineString = turf.lineString(cleanCoords); map.getSource('route').setData(lineString);
+                routeFeedback.textContent = `Route ready: ${nodes[start].name} to ${nodes[end].name}.`;
+                routeFeedback.dataset.state = 'success';
+
+                const stepsDiv = document.getElementById('steps-container');
+                stepsDiv.innerHTML = `<div class="step"><span class="icon material-icons">door_front</span> <span>Exit <b>${nodes[start].name}</b></span></div>`;
+                
+                let fullSpeechText = `Starting from ${nodes[start].name}. `;
+
+                let currentBearing = getBearing(cleanCoords[0], cleanCoords[1]);
+                for (let i = 1; i < cleanCoords.length - 1; i++) {
+                    let nextBearing = getBearing(cleanCoords[i], cleanCoords[i + 1]);
+                    let diff = (nextBearing - currentBearing + 360) % 360;
+
+                    if (diff > 45 && diff < 160) {
+                        stepsDiv.innerHTML += `<div class="step"><span class="icon material-icons">turn_right</span> <span>Turn <b>Right</b></span></div>`;
+                        fullSpeechText += `Turn right ahead. `;
+                    } else if (diff > 200 && diff < 315) {
+                        stepsDiv.innerHTML += `<div class="step"><span class="icon material-icons">turn_left</span> <span>Turn <b>Left</b></span></div>`;
+                        fullSpeechText += `Turn left ahead. `;
+                    }
+                    currentBearing = nextBearing;
+                }
+                stepsDiv.innerHTML += `<div class="step"><span class="icon material-icons" style="color:#a855f7">place</span> <span>Enter <b>${nodes[end].name}</b></span></div>`;
+                fullSpeechText += `You will arrive at your destination, ${nodes[end].name}.`;
+
+                speak(fullSpeechText);
+
+                // --- ACTIVITY TRACKER (ROUTING) ---
+                const activity = { timestamp: new Date().toLocaleString(), location: `Mapsd from ${nodes[start].name} to ${nodes[end].name}`, user: role };
+                let activities = JSON.parse(localStorage.getItem("activities") || "[]");
+                activities.push(activity); if(activities.length > 100) activities.shift(); localStorage.setItem("activities", JSON.stringify(activities));
+
+                let denseCoords = [];
+                for (let i = 0; i < cleanCoords.length - 1; i++) { let startP = cleanCoords[i], endP = cleanCoords[i + 1]; let dist = Math.hypot(endP[0] - startP[0], endP[1] - startP[1]); let steps = Math.max(10, Math.floor(dist * 100000)); for (let j = 0; j < steps; j++) { denseCoords.push([startP[0] + (endP[0] - startP[0]) * (j / steps), startP[1] + (endP[1] - startP[1]) * (j / steps)]); } }
+                denseCoords.push(cleanCoords[cleanCoords.length - 1]);
+                let animationCounter = 0;
+                function animateWalker() { map.getSource('walker').setData({ type: 'Point', coordinates: denseCoords[animationCounter] }); animationCounter += 2; if (animationCounter >= denseCoords.length) animationCounter = 0; animationId = requestAnimationFrame(animateWalker); }
+                animateWalker();
+                map.flyTo({ center: cleanCoords[1], zoom: 19.5, pitch: 70, bearing: getBearing(cleanCoords[0], cleanCoords[1]), speed: 0.8 });
+            } else {
+                routeFeedback.textContent = 'No walking route is available between those locations.';
+                routeFeedback.dataset.state = 'error';
+            }
+        }
+    </script>
+</body>
+</html>
